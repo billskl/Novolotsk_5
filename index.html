@@ -48,8 +48,12 @@ h1{margin:0;font-family:var(--f-display);font-weight:700;font-size:clamp(20px,5.
 .day[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .day.today:not([aria-pressed="true"]){border-color:var(--accent)}
 
+.dirs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.dirb{appearance:none;border:0;background:transparent;color:var(--fg);border-radius:9px;min-height:44px;font:inherit;font-weight:600;cursor:pointer}
+.dirb[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.dirb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .label{font-size:13px;color:var(--muted)}
-.favs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.favs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .fav{appearance:none;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);
   border-radius:12px;padding:10px 12px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-height:44px}
 .fav .nm{font-weight:600;line-height:1.2}
@@ -94,13 +98,18 @@ h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:18px;line-hei
     <div class="sub">Полоцк (Швейная фабрика) ⇄ Новополоцк (автовокзал)</div>
   </header>
 
+  <nav class="dirs" id="dirs" aria-label="Направление">
+    <button type="button" class="dirb" id="dir-N" data-dir="N" aria-pressed="false">В Полоцк</button>
+    <button type="button" class="dirb" id="dir-P" data-dir="P" aria-pressed="false">В Новополоцк</button>
+  </nav>
+
   <nav class="days" id="days" aria-label="День недели"></nav>
 
   <div class="label">Избранные остановки</div>
   <div class="favs" id="favs"></div>
 
   <div class="pick">
-    <label class="label" for="stopSel">Другая остановка</label>
+    <label class="label" for="stopSel">Другая остановка в этом направлении</label>
     <select id="stopSel"></select>
   </div>
 
@@ -178,8 +187,12 @@ function tripsAt(stop,day){
 
 const now=new Date();
 const todayIdx=(now.getDay()+6)%7+1;
-let sel=todayIdx, cur="P1";
-try{const s=localStorage.getItem("bus5-stop");if(s&&STOPS.some(x=>x.id===s))cur=s}catch(e){}
+let sel=todayIdx, cur="N7";
+const last={P:"P1",N:"N7"};
+try{const s=localStorage.getItem("bus5-stop");if(s&&STOPS.some(x=>x.id===s))cur=s;
+  for(const d of ["P","N"]){const v=localStorage.getItem("bus5-last-"+d);if(v&&STOPS.some(x=>x.id===v&&x.dir===d))last[d]=v}}catch(e){}
+const dirOf=id=>STOPS.find(x=>x.id===id).dir;
+function renderDirs(){const d=dirOf(cur);for(const b of document.querySelectorAll(".dirb"))b.setAttribute("aria-pressed",String(b.dataset.dir===d))}
 
 const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
 
@@ -193,13 +206,14 @@ function nextLabel(stop){
   return "с "+(list[0].exact?"":"≈")+fmt(list[0].min);
 }
 function renderFavs(){
-  document.getElementById("favs").innerHTML=FAVS.map(id=>{const s=STOPS.find(x=>x.id===id);
+  const d=dirOf(cur);
+  document.getElementById("favs").innerHTML=FAVS.filter(id=>dirOf(id)===d).map(id=>{const s=STOPS.find(x=>x.id===id);
     return `<button type="button" class="fav" id="fav-${id}" data-id="${id}" aria-pressed="${cur===id}"><span class="nm">${s.name}</span><span class="dir">${DIRNAME[s.dir]}</span><span class="nx">${nextLabel(s)}</span></button>`}).join("");
 }
 function renderSelect(){
   const sl=document.getElementById("stopSel");
-  const opt=d=>STOPS.filter(s=>s.dir===d).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
-  sl.innerHTML=`<option value="">Выбери остановку…</option><optgroup label="В Новополоцк (из Полоцка)">${opt("P")}</optgroup><optgroup label="В Полоцк (из Новополоцка)">${opt("N")}</optgroup>`;
+  const d=dirOf(cur);
+  sl.innerHTML=`<option value="">Выбери остановку…</option>`+STOPS.filter(s=>s.dir===d).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
   sl.value=FAVS.includes(cur)?"":cur;
 }
 function renderBoard(){
@@ -220,8 +234,9 @@ function renderBoard(){
   else if(isToday&&!found) rows.push('<li class="empty">Сегодня рейсов больше нет. Выбери завтрашний день.</li>');
   document.getElementById("board").innerHTML=rows.join("");
 }
-function render(){renderDays();renderFavs();renderSelect();renderBoard()}
-function setStop(id){if(!id)return;cur=id;try{localStorage.setItem("bus5-stop",id)}catch(e){}render()}
+function render(){renderDirs();renderDays();renderFavs();renderSelect();renderBoard()}
+function setStop(id){if(!id)return;cur=id;last[dirOf(id)]=id;try{localStorage.setItem("bus5-stop",id);localStorage.setItem("bus5-last-"+dirOf(id),id)}catch(e){}render()}
+document.getElementById("dirs").addEventListener("click",e=>{const b=e.target.closest(".dirb");if(b&&b.dataset.dir!==dirOf(cur))setStop(last[b.dataset.dir])});
 
 document.getElementById("days").addEventListener("click",e=>{const b=e.target.closest(".day");if(b){sel=+b.dataset.d;render()}});
 document.getElementById("favs").addEventListener("click",e=>{const b=e.target.closest(".fav");if(b)setStop(b.dataset.id)});
