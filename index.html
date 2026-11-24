@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f6b5c">
+<title>Автобус №5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* VOICE: остановочное табло, спокойно и крупно
+   IDEA: табличка расписания на остановке, только для одной выбранной
+   PICTURE: список с крупными «висящими» временами
+   COLOUR and TYPE: как у табло «Вороничи»: зелёный транспортный, жёлтый «ближайший», моноширинные цифры
+   LAYOUT: одна колонка: дни, избранные остановки, выбор из списка, табло */
+:root{
+  --bg:#eef2f1; --surface:#ffffff; --fg:#14211f; --muted:#5b6b68; --line:#d5dedb;
+  --accent:#0f6b5c; --accent-ink:#ffffff; --next:#f2b705; --next-ink:#2a2100;
+  --warn:#c2410c; --warn-bg:#fdeee6;
+  --f-display:"Unbounded","Rubik",system-ui,sans-serif;
+  --f-body:"Rubik",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"Consolas",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1716; --surface:#172220; --fg:#e6efed; --muted:#93a5a1; --line:#283633;
+  --accent:#3fb39d; --accent-ink:#06201b; --warn:#fb923c; --warn-bg:#3a2216; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1716; --surface:#172220; --fg:#e6efed; --muted:#93a5a1; --line:#283633;
+  --accent:#3fb39d; --accent-ink:#06201b; --warn:#fb923c; --warn-bg:#3a2216; color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.45;overflow-x:clip}
+.wrap{max-width:620px;margin:0 auto;padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-direction:column;gap:6px}
+.stop{display:flex;align-items:center;gap:10px}
+.sign{flex:none;width:38px;height:38px;border-radius:8px;background:var(--accent);color:var(--accent-ink);
+  display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:20px}
+h1{margin:0;font-family:var(--f-display);font-weight:700;font-size:clamp(20px,5.2vw,26px);line-height:1.15;text-wrap:balance}
+.sub{color:var(--muted);font-size:14px}
+
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  border-radius:10px;padding:12px 0;font:inherit;cursor:pointer;min-height:44px}
+.day b{font-family:var(--f-display);font-weight:500;font-size:14px}
+.day[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.day.today:not([aria-pressed="true"]){border-color:var(--accent)}
+
+.label{font-size:13px;color:var(--muted)}
+.favs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.fav{appearance:none;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  border-radius:12px;padding:10px 12px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-height:44px}
+.fav .nm{font-weight:600;line-height:1.2}
+.fav .dir{font-size:12px;color:var(--muted)}
+.fav .nx{font-family:var(--f-mono);font-weight:700;font-size:15px;margin-top:4px;font-variant-numeric:tabular-nums}
+.fav[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.fav[aria-pressed="true"] .nm{color:var(--accent)}
+@media (max-width:420px){.favs{grid-template-columns:1fr}.fav{flex-direction:row;align-items:baseline;flex-wrap:wrap;column-gap:8px}.fav .nx{margin:0 0 0 auto}}
+
+.pick{display:flex;flex-direction:column;gap:6px}
+select{font:inherit;font-size:16px;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--surface);color:var(--fg);width:100%}
+select:focus-visible,.day:focus-visible,.fav:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.head{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:18px;line-height:1.25}
+.summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+
+.board{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.trip{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;align-items:center;padding:12px 16px;border-top:1px solid var(--line)}
+.trip:first-child{border-top:0}
+.dep{font-family:var(--f-mono);font-weight:700;font-size:26px;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap}
+.dep .ap{font-size:15px;color:var(--muted);margin-right:2px;font-weight:500}
+.info{display:flex;flex-direction:column;gap:1px;font-size:14px}
+.info .v{font-weight:500}
+.info .s{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.tag{grid-column:1 / 3;justify-self:start;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--next);color:var(--next-ink)}
+.warn{grid-column:1 / 3;font-size:13px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:5px 10px}
+.trip.past{opacity:.42}
+.trip.next{background:color-mix(in srgb,var(--next) 14%,var(--surface))}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.note a{color:var(--accent)}
+@media (max-width:380px){.dep{font-size:22px}.trip{padding:12px}}
+@media (prefers-reduced-motion:no-preference){.trip{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="stop"><div class="sign" aria-hidden="true">5</div><h1>Автобус №5</h1></div>
+    <div class="sub">Полоцк (Швейная фабрика) ⇄ Новополоцк (автовокзал)</div>
+  </header>
+
+  <nav class="days" id="days" aria-label="День недели"></nav>
+
+  <div class="label">Избранные остановки</div>
+  <div class="favs" id="favs"></div>
+
+  <div class="pick">
+    <label class="label" for="stopSel">Другая остановка</label>
+    <select id="stopSel"></select>
+  </div>
+
+  <div class="head">
+    <h2 id="stopTitle"></h2>
+    <div class="summary"><span id="dirLine"></span><span id="count"></span></div>
+  </div>
+  <ul class="board" id="board"></ul>
+
+  <div class="note">
+    <span>Время у конечных (Швейная фабрика и автовокзал Новополоцка) взято из расписания перевозчика АТП №6: будни с 03.11.2025, выходные с 01.11.2025. Знак ≈ стоит у расчётного времени: к нему прибавлено время в пути от конечной по Яндекс Картам, возможна разница в пару минут.</span>
+    <span>Поздний рейс 22:40 «через аэродром» идёт после Больницы Ксты другой дорогой и не проходит Развилку, Петруся Бровки, 23 Гвардейцев и Кульнева.</span>
+    <span>Источник: <a href="https://atp6voat.by/marshrut-5/">atp6voat.by/marshrut-5</a>. Расписание справочное.</span>
+  </div>
+</div>
+
+<script>
+{
+// Остановки и время в пути от начальной точки варианта (мин), по Яндекс Картам.
+// P = в Новополоцк (от Швейной фабрики), N = в Полоцк (от автовокзала Новополоцка).
+const P_STOPS=[["Швейная фабрика",0,0],["Юбилейная",1,1],["Кульнева",4,3],["23 Гвардейцев",6,5],["Петруся Бровки",7,7],["Развилка",9,8],["Больница Ксты",11,10],["Экимань-2",13,12],["Экимань-1",15,14],["Луговая",17,16],["Солнечная",19,17],["Полимировская",20,19],["8-й микрорайон",22,20],["Василевцы",23,21],["Подкастельцы",24,22],["Завод Измеритель",26,24],["Гостиница Нафтан",27,25],["Кинотеатр Минск",29,26],["Музыкальная школа",30,28],["Комсомольская",31,29],["Молодёжная",33,30],["Гостиница Беларусь",35,32],["Кинотеатр Космос",37,34],["Первая палатка",40,37],["Гайдара",42,39],["Слободская",44,41],["Торговый центр",46,null]];
+// [имя, основной, аэродром, с Завода КПД, с ОАО Нафтан]
+const N_STOPS=[["Автовокзал Новополоцк",0,0,null,null],["Слободская",5,4,null,null],["Гайдара",7,6,null,null],["Первая палатка",9,8,null,null],["Кинотеатр Космос",12,11,28,17],["Гостиница Беларусь",13,12,29,18],["Строительная",15,14,31,20],["Молодёжная",16,15,32,21],["Комсомольская",18,17,35,23],["Музыкальная школа",19,18,36,25],["Кинотеатр Минск",20,19,38,26],["Гостиница Нафтан",22,20,39,28],["Завод Измеритель",23,22,41,29],["Подкастельцы",25,23,43,31],["Василевцы",26,24,44,32],["8-й микрорайон",27,25,46,34],["Полимировская",29,27,47,35],["Солнечная",30,28,49,37],["Луговая",31,29,51,38],["Экимань-1",33,31,53,40],["Экимань-2",35,33,55,42],["Больница Ксты",37,35,58,45],["Развилка",40,null,61,47],["Петруся Бровки",41,null,62,49],["23 Гвардейцев",43,null,64,51],["Кульнева",45,null,67,53],["Юбилейная",47,53,70,56]];
+
+// Рейсы перевозчика. d: w пн–чт, f пт, sa сб, su вс. v: вариант.
+const WK=["w","f"], WE=["sa","su"];
+const P_TRIPS=[
+  ...["05:55","07:47","08:20","08:55","09:28","09:45","10:30","11:00","11:45","12:25","13:05","14:30","14:55","15:30","15:48","16:05","16:20","17:25","18:00","18:25","18:35","19:35","20:15","21:05","21:45","23:08","23:30"].map(t=>({t,d:WK,v:"m"})),
+  {t:"10:05",d:WK,v:"m",small:1},
+  {t:"06:36",d:WK,v:"k"},{t:"07:10",d:WK,v:"p"},
+  {t:"16:40",d:["w"],v:"m"},{t:"18:15",d:["w"],v:"m"},
+  {t:"17:15",d:["f"],v:"m"},{t:"17:35",d:["f"],v:"m"},
+  ...["05:55","06:45","07:25","08:20","08:55","09:40","10:55","11:30","12:10","13:00","13:55","15:05","16:00","16:25","16:55","17:30","18:05","19:15","20:15","21:05","21:45","23:08","23:30"].map(t=>({t,d:WE,v:"m"})),
+  {t:"18:35",d:["sa"],v:"m"}
+];
+const N_TRIPS=[
+  ...["05:00","05:43","06:15","06:50","07:20","08:00","08:33","08:50","09:35","10:05","10:50","11:30","12:10","13:35","14:00","14:35","14:52","15:10","15:25","16:25","17:05","17:40","18:40","19:20","20:10","20:52","22:15"].map(t=>({t,d:WK,v:"m"})),
+  {t:"09:10",d:WK,v:"m",small:1},
+  {t:"15:45",d:["w"],v:"m"},{t:"16:40",d:["f"],v:"m"},
+  {t:"17:01",d:["w"],v:"k"},{t:"16:04",d:["f"],v:"k"},
+  {t:"17:15",d:WK,v:"n"},
+  ...["05:00","05:50","06:30","07:25","08:00","08:45","10:00","10:35","11:15","12:10","13:00","14:10","15:05","15:30","16:00","16:35","17:10","18:20","19:20","20:10","20:52","22:15"].map(t=>({t,d:WE,v:"m"})),
+  {t:"17:40",d:["sa"],v:"m"},
+  {t:"22:40",d:[...WK,...WE],v:"a"}
+];
+const P_VAR={m:{col:1,lbl:"до автовокзала Новополоцка",from:"от Швейной фабрики"},k:{col:2,lbl:"через Полимир до Завода КПД",from:"от Швейной фабрики"},p:{col:2,lbl:"через Нафтан и Полимир",from:"от Швейной фабрики"}};
+const N_VAR={m:{col:1,lbl:"до Полоцка",from:"от автовокзала Новополоцка"},a:{col:2,lbl:"через аэродром",from:"от автовокзала Новополоцка"},k:{col:3,lbl:"с Завода КПД (через ПХК)",from:"от Завода КПД"},n:{col:4,lbl:"с ОАО Нафтан (НПЗ)",from:"от ОАО Нафтан"}};
+
+const STOPS=[
+  ...P_STOPS.map((s,i)=>({id:"P"+i,name:s[0],dir:"P",row:s})),
+  ...N_STOPS.map((s,i)=>({id:"N"+i,name:s[0],dir:"N",row:s}))
+];
+const FAVS=["P1","N7","N10"];
+const DIRNAME={P:"в Новополоцк",N:"в Полоцк"};
+const SHORT=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+const FULL=["понедельник","вторник","среда","четверг","пятница","суббота","воскресенье"];
+const dayType=i=>i<=4?"w":i===5?"f":i===6?"sa":"su";
+
+const toMin=t=>{const[h,m]=t.split(":").map(Number);return h*60+m};
+const fmt=m=>{m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const plural=n=>{const a=n%10,b=n%100;if(a===1&&b!==11)return"рейс";if(a>=2&&a<=4&&(b<12||b>14))return"рейса";return"рейсов"};
+
+function tripsAt(stop,day){
+  const dt=dayType(day), isP=stop.dir==="P";
+  const trips=isP?P_TRIPS:N_TRIPS, VAR=isP?P_VAR:N_VAR;
+  const out=[];
+  for(const tr of trips){
+    if(!tr.d.includes(dt)) continue;
+    const vv=VAR[tr.v], off=stop.row[vv.col];
+    if(off===null||off===undefined) continue;
+    out.push({min:toMin(tr.t)+off,base:tr.t,exact:off===0,v:tr.v,lbl:vv.lbl,from:vv.from,small:tr.small,start:off===0});
+  }
+  return out.sort((a,b)=>a.min-b.min);
+}
+
+const now=new Date();
+const todayIdx=(now.getDay()+6)%7+1;
+let sel=todayIdx, cur="P1";
+try{const s=localStorage.getItem("bus5-stop");if(s&&STOPS.some(x=>x.id===s))cur=s}catch(e){}
+
+const nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
+
+function renderDays(){
+  document.getElementById("days").innerHTML=SHORT.map((s,i)=>
+    `<button type="button" id="day-${i+1}" class="day${i+1===todayIdx?" today":""}" aria-pressed="${i+1===sel}" data-d="${i+1}"><b>${s}</b></button>`).join("");
+}
+function nextLabel(stop){
+  const list=tripsAt(stop,sel); if(!list.length) return "нет рейсов";
+  if(sel===todayIdx){const n=list.find(x=>x.min>=nowMin()); return n?(n.exact?"":"≈")+fmt(n.min):"рейсов нет";}
+  return "с "+(list[0].exact?"":"≈")+fmt(list[0].min);
+}
+function renderFavs(){
+  document.getElementById("favs").innerHTML=FAVS.map(id=>{const s=STOPS.find(x=>x.id===id);
+    return `<button type="button" class="fav" id="fav-${id}" data-id="${id}" aria-pressed="${cur===id}"><span class="nm">${s.name}</span><span class="dir">${DIRNAME[s.dir]}</span><span class="nx">${nextLabel(s)}</span></button>`}).join("");
+}
+function renderSelect(){
+  const sl=document.getElementById("stopSel");
+  const opt=d=>STOPS.filter(s=>s.dir===d).map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
+  sl.innerHTML=`<option value="">Выбери остановку…</option><optgroup label="В Новополоцк (из Полоцка)">${opt("P")}</optgroup><optgroup label="В Полоцк (из Новополоцка)">${opt("N")}</optgroup>`;
+  sl.value=FAVS.includes(cur)?"":cur;
+}
+function renderBoard(){
+  const stop=STOPS.find(x=>x.id===cur);
+  document.getElementById("stopTitle").textContent=stop.name;
+  document.getElementById("dirLine").textContent=`${DIRNAME[stop.dir]} · ${FULL[sel-1]}${sel===todayIdx?", сегодня":""}`;
+  const list=tripsAt(stop,sel);
+  document.getElementById("count").textContent=`${list.length} ${plural(list.length)}`;
+  const isToday=sel===todayIdx, nm=nowMin(); let found=false;
+  const rows=list.map(x=>{
+    let cls="trip",tag="";
+    if(isToday){ if(x.min<nm) cls+=" past"; else if(!found){found=true;cls+=" next";const l=x.min-nm,h=Math.floor(l/60),m=l%60;tag=`<span class="tag">Ближайший · через ${h?h+" ч ":""}${m} мин</span>`} }
+    const extra=x.v!=="m"?`<span class="warn">Особый рейс: ${x.lbl}</span>`:"";
+    const src=x.start?"отправление по расписанию":`${x.from} в ${x.base}`;
+    return `<li class="${cls}"><span class="dep">${x.exact?"":'<span class="ap">≈</span>'}${fmt(x.min)}</span><div class="info"><span class="v">${x.v==="m"?x.lbl:"№5 · особый рейс"}${x.small?" · малый автобус":""}</span><span class="s">${src}</span></div>${tag}${extra}</li>`;
+  });
+  if(!rows.length) rows.push('<li class="empty">В этот день рейсов нет</li>');
+  else if(isToday&&!found) rows.push('<li class="empty">Сегодня рейсов больше нет. Выбери завтрашний день.</li>');
+  document.getElementById("board").innerHTML=rows.join("");
+}
+function render(){renderDays();renderFavs();renderSelect();renderBoard()}
+function setStop(id){if(!id)return;cur=id;try{localStorage.setItem("bus5-stop",id)}catch(e){}render()}
+
+document.getElementById("days").addEventListener("click",e=>{const b=e.target.closest(".day");if(b){sel=+b.dataset.d;render()}});
+document.getElementById("favs").addEventListener("click",e=>{const b=e.target.closest(".fav");if(b)setStop(b.dataset.id)});
+document.getElementById("stopSel").addEventListener("change",e=>setStop(e.target.value));
+render();
+setInterval(()=>{if(sel===todayIdx){renderFavs();renderBoard()}},60000);
+}
+</script>
+</body>
+</html>
